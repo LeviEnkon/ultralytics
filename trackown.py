@@ -8,8 +8,10 @@ import cv2
 
 import math
 
-MOUNT_HEIGHT = 150 #カメラ視野高さ
-CAMERA_HALF_ANGLE = 170/2 #カメラ広角
+MOUNT_HEIGHT = 20 #カメラ視野高さ
+CAMERA_HALF_ANGLE = 50/2 #カメラ上下広角 Dynabook RX73:50
+YSIZE=480
+XSIZE=640
 
 model = YOLO('yolov8n.pt')
 #results=model.track(source='0', show=True, tracker='botsort.yaml')
@@ -27,15 +29,23 @@ def check_approach(lasth, h):
     else:
         return False
 
-def distance(y):
-    if y <= 240:
+def distance(x,y):
+    if y <= YSIZE/2:
         dist = -1
     elif y >= 479:
         dist = 0
     else:
-        angle = 90 - (y-240)/240 * CAMERA_HALF_ANGLE
-        dist = MOUNT_HEIGHT * math.tan(math.radians(angle))
+        angle_y = 90 - (y-YSIZE/2)/(YSIZE/2) * CAMERA_HALF_ANGLE
+        dist_y = MOUNT_HEIGHT * math.tan(math.radians(angle_y))
+        angle_x = abs(x-XSIZE/2)/(XSIZE/2) * CAMERA_HALF_ANGLE
+        dist_x = dist_y * math.tan(math.radians(angle_x))
+        dist=math.sqrt(dist_x*dist_x + dist_y*dist_y)
     return dist
+
+def speed(lastdist, dist, t):
+    if lastdist==-1:
+        return -1
+    return -(dist-lastdist)/t
 
 while True:
     ret, frame= cap.read()
@@ -66,7 +76,7 @@ while True:
         lastheight = 0 #物体毎にlasthリセット
         lastdist = 0
 
-        dist = distance(ydown)
+        dist = distance(xmid,ydown)
         if dist == -1:
             print("物体",id,"が十分遠い")
         elif dist == 0:
@@ -86,20 +96,27 @@ while True:
             i+=1
         if i==len(detects): #IDはリストに存在しない
             detects.append([id, 0, h, -1, dist])
+        spd=speed(lastdist, dist, inferencetime)
 
-        if check_approach(lastheight, h)==True:
-            print("物体",id,"が接近中!")
+        if ydown>=479:
+            info="Passing"
+        elif ydown<240:
+            info="In Range"
         else:
-            print("接近なし")
+            if check_approach(lastheight, h)==True:
+                info="Approaching"
+            else:
+                info="No Approach"
         
 
         print("物体id", id, "物体種類", boxclass, "中下座標", xmid, ",", ydown, "h=", h)
         cv2.rectangle(frame, (coordinate[0], coordinate[1]), (coordinate[2], coordinate[3]), (0, 255, 0), 2)
-        cv2.putText(frame, f"Id {id}", (coordinate[0], coordinate[1]),
-            cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), thickness = 2, )
+        cv2.putText(frame, f"Id.{id}, Dist.{dist/100:.2f}m", (coordinate[0], coordinate[1]),cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), thickness = 1, )
+        cv2.putText(frame, f"Spd:{spd/100:.2f}m/s,{info}", (coordinate[0], coordinate[1]+20),cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), thickness = 1, )
         cv2.drawMarker(frame, (xmid, ydown), (255, 0, 0), thickness = 2)
+        cv2.putText(frame, f"({xmid},{ydown})", (xmid, ydown),cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), thickness = 1, )
     print("#####################")
-    time.sleep(2) #force 1 fps
+    # time.sleep(2) #force 1 fps
     cv2.imshow("frame", frame)
     if cv2.waitKey(1) & 0xFF == ord("q"):
         break
