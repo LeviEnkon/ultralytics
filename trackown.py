@@ -19,33 +19,32 @@ source = "0"
 racker='botsort.yaml'
 cap = cv2.VideoCapture(0)
 
-lastheight=0
+detects = [] #0:id 1:lastydown 2:newydown 3:lastdistance 4:newdistance
 
-detects = [] #0:id 1:lasth 2:h 3:lasty 4:y
-
-def check_approach(lasth, h):
-    if lasth != 0 and h>lasth:
+def check_approach(lasty, y):
+    if (lasty != 0 and y>lasty) or y>=YSIZE-1:
         return True
     else:
         return False
 
-def distance(x,y):
+
+def distance_angle(x,y):
+    angle_x = abs(x-XSIZE/2)/(XSIZE/2) * CAMERA_HALF_ANGLE
+    angle_y = (y-YSIZE/2)/(YSIZE/2) * CAMERA_HALF_ANGLE
     if y <= YSIZE/2:
         dist = -1
     elif y >= 479:
         dist = 0
     else:
-        angle_y = 90 - (y-YSIZE/2)/(YSIZE/2) * CAMERA_HALF_ANGLE
-        dist_y = MOUNT_HEIGHT * math.tan(math.radians(angle_y))
-        angle_x = abs(x-XSIZE/2)/(XSIZE/2) * CAMERA_HALF_ANGLE
+        dist_y = MOUNT_HEIGHT / math.tan(math.radians(angle_y))
         dist_x = dist_y * math.tan(math.radians(angle_x))
         dist=math.sqrt(dist_x*dist_x + dist_y*dist_y)
-    return dist
+    return [dist, angle_y, angle_x]
 
-def speed(lastdist, dist, t):
+def speed(lastdist, dist, lastanglex, anglex, t):
     if lastdist==-1:
         return -1
-    return -(dist-lastdist)/t
+    return -(dist*math.cos(math.radians(anglex))-lastdist*math.cos(math.radians(lastanglex)))/t
 
 while True:
     ret, frame= cap.read()
@@ -73,10 +72,13 @@ while True:
         id = box.id.cpu().numpy().astype(int)[0]
         
         i = 0
-        lastheight = 0 #物体毎にlasthリセット
+        lasty = 0 #物体毎にlasthリセット
         lastdist = 0
+        lastanglex = 0
 
-        dist = distance(xmid,ydown)
+        dist_an = distance_angle(xmid,ydown)
+        dist, angle_y, angle_x = dist_an[0], dist_an[1], dist_an[2]
+
         if dist == -1:
             print("物体",id,"が十分遠い")
         elif dist == 0:
@@ -86,24 +88,30 @@ while True:
 
         while i <len(detects): #探知されたもののリストからidを探す
             if detects[i][0]==id:
-                detects[i][1] = detects[i][2] #前回の高さをlasthにする
-                lastheight = detects[i][1] #以前格納された高さを取り出す
-                detects[i][2] = h #新しい高さをlasthに格納
+                #前後フレームｙ座標
+                detects[i][1] = detects[i][2] #前回の高さをlastyにする
+                lasty = detects[i][1] #以前格納されたydownさを取り出す
+                detects[i][2] = ydown #新しい高さをlastydownに格納
+                #前後フレーム距離
                 detects[i][3] = detects[i][4]
                 lastdist = detects[i][3]
                 detects[i][4] = dist
+                #前後フレームx角度
+                detects[i][5] = detects[i][6]
+                lastanglex = detects[i][5]
+                detects[i][6] = angle_x
                 break
             i+=1
         if i==len(detects): #IDはリストに存在しない
-            detects.append([id, 0, h, -1, dist])
-        spd=speed(lastdist, dist, inferencetime)
+            detects.append([id, 0, ydown, -1, dist, 0, angle_x])
+        spd=speed(lastdist, dist, lastanglex, angle_x, inferencetime)
 
-        if ydown>=479:
+        if ydown>=YSIZE-1:
             info="Passing"
         elif ydown<240:
-            info="In Range"
+            info="Far"
         else:
-            if check_approach(lastheight, h)==True:
+            if check_approach(lasty, ydown)==True:
                 info="Approaching"
             else:
                 info="No Approach"
