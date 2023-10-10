@@ -4,7 +4,7 @@ from ultralytics import YOLO
 cap = cv2.VideoCapture(0)
 model = YOLO('yolov8n.pt')
 source = '0'
-racker='botsort.yaml'
+tracker='botsort.yaml'
 while True:
     ret, frame= cap.read()
     if not ret:

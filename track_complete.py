@@ -7,6 +7,7 @@ import time
 import cv2
 
 import math
+import lanedetect as ld
 
 MOUNT_HEIGHT = 135.5 #カメラ視野高さ(cm)
 FOV_H = 60/2 #カメラ左右広角 Dynabook RX73:50
@@ -54,7 +55,7 @@ while True:
     initialtime = time.perf_counter() #処理開始時間
     results = model.track(frame, imgsz=XSIZE, conf=0.3, iou=0.5, persist=True, show=False, tracker='botsort.yaml')
     inferencetime = time.perf_counter() - initialtime
-    print("時間差：", inferencetime, "s")
+    # print("時間差：", inferencetime, "s")
 
     if results[0].boxes.id is None: #物体検出なし
         cv2.imshow("frame", frame)
