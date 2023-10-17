@@ -1,5 +1,5 @@
 import cv2
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 import numpy as np
 
 #ref: https://medium.com/analytics-vidhya/building-a-lane-detection-system-f7a727c6694
@@ -24,12 +24,12 @@ def gauss(image):
   return cv2.GaussianBlur(image,(5,5),0)
 #Canny edge detection
 def canny(image):
-    edges = cv2.Canny(image,200, 820)
+    edges = cv2.Canny(image,200, 300)
     return edges
 
-def region(image):
+def region(image): #make mask, use the result of canny
     height, width = image.shape
-    triangle = np.array([[(0, height), (width//2, height//2), (width, height)]])
+    triangle = np.array([[(0, height), (width//2, height*2//3), (width, height)]])
     mask = np.zeros_like(image)
     mask = cv2.fillPoly(mask, triangle, 255)
     mask = cv2.bitwise_and(image, mask)
@@ -59,28 +59,32 @@ def make_points(image, average):
 def average(image, lines):
     left = []
     right = []
-
-    if lines is not None:
-      for line in lines:
-        print(line)
-        x1, y1, x2, y2 = line.reshape(4)
-        #fit line to points, return slope and y-int
-        parameters = np.polyfit((x1, x2), (y1, y2), 1)
-        print(parameters)
-        slope = parameters[0]
-        y_int = parameters[1]
-        #lines on the right have positive slope, and lines on the left have neg slope
-        if slope < 0:
-            left.append((slope, y_int))
-        else:
-            right.append((slope, y_int))
-            
-    #takes average among all the columns (column0: slope, column1: y_int)
-    right_avg = np.average(right, axis=0)
-    left_avg = np.average(left, axis=0)
-    #create lines based on averages calculates
-    left_line = make_points(image, left_avg)
-    right_line = make_points(image, right_avg)
+    height, width = image.shape[:2]
+    try: #only process when no error
+        if lines is not None:
+            for line in lines:
+                print(line)
+                x1, y1, x2, y2 = line.reshape(4)
+                #fit line to points, return slope and y-int
+                parameters = np.polyfit((x1, x2), (y1, y2), 1)
+                print(parameters)
+                slope = parameters[0]
+                y_int = parameters[1]
+                #lines on the right have positive slope, and lines on the left have neg slope
+                if slope < 0:
+                    left.append((slope, y_int))
+                else:
+                    right.append((slope, y_int))
+                    
+            #takes average among all the columns (column0: slope, column1: y_int)
+        right_avg = np.average(right, axis=0)
+        left_avg = np.average(left, axis=0)
+        #create lines based on averages calculates
+        left_line = make_points(image, left_avg)
+        right_line = make_points(image, right_avg)
+    except TypeError:
+        left_line = np.array([width//4, height, width//2-35, 288])
+        right_line = np.array([width*3//4, height, width//2+35, 288])
     return np.array([left_line, right_line])
 
 
