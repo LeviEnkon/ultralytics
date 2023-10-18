@@ -20,6 +20,7 @@ model = YOLO('yolov8n.pt')
 source = "0"
 tracker='botsort.yaml'
 cap = cv2.VideoCapture(0)
+
 detects = pd.DataFrame(columns=["id", "newy", "newd", "newxan", "last_accessed"]) #0:id 1:lastydown 2:newydown 3:lastdistance 4:newdistance 5:last x angle 6: new x angle
 
 def cleanup_old_entries():
@@ -48,6 +49,7 @@ def check_approach(lasty, y):
     else:
         return False
 
+
 def distance_angle(x,y):
     angle_x = abs(x-XSIZE/2)/(XSIZE/2) * FOV_H
     angle_y = (y-YSIZE/2)/(YSIZE/2) * FOV_V
@@ -73,7 +75,7 @@ while True:
     initialtime = time.perf_counter() #処理開始時間
     results = model.track(frame, imgsz=XSIZE, conf=0.3, iou=0.5, persist=True, show=False, tracker='botsort.yaml')
     inferencetime = time.perf_counter() - initialtime
-    #print("時間差：", inferencetime, "s")
+    print("時間差：", inferencetime, "s")
 
     if results[0].boxes.id is None: #物体検出なし
         cv2.imshow("frame", frame)
@@ -85,7 +87,7 @@ while True:
     # height = boxes[3] #物体高さ
     for box in results[0].boxes:
         coordinate = box.xyxy.cpu().numpy().astype(int)[0]
-        #print("角座標",coordinate)
+        print("角座標",coordinate)
         xmid = int((coordinate[0]+coordinate[2])/2) #枠下線の中心点ｘ座標
         ydown = coordinate[3] #枠下線のｙ座標
         h = box.xywh.cpu().numpy().astype(int)[0][3]
@@ -100,12 +102,12 @@ while True:
         dist_an = distance_angle(xmid,ydown)
         dist, angle_y, angle_x = dist_an[0], dist_an[1], dist_an[2]
 
-        # if dist == -1:
-        #     print("物体",id,"が十分遠い")
-        # elif dist == 0:
-        #     print("物体",id,"が探知範囲を経過")
-        # else:
-        #     print("物体",id,"の距離は ",dist/100," m")
+        if dist == -1:
+            print("物体",id,"が十分遠い")
+        elif dist == 0:
+            print("物体",id,"が探知範囲を経過")
+        else:
+            print("物体",id,"の距離は ",dist/100," m")
 
         if id not in detects['id'].values: #存在しなかった目標
             lasty=0
@@ -116,7 +118,25 @@ while True:
             lastdist=detects.loc[detects['id'] == id, 'newd'].values[0]
             lastanglex=detects.loc[detects['id'] == id, 'newxan'].values[0]
         access_or_add(id, ydown, dist, angle_x) #更新または追加
-
+        
+        # while i <len(detects): #探知されたもののリストからidを探す
+        #     if detects[i][0]==id:
+        #         #前後フレームｙ座標
+        #         detects[i][1] = detects[i][2] #前回の高さをlastyにする
+        #         lasty = detects[i][1] #以前格納されたydownさを取り出す
+        #         detects[i][2] = ydown #新しい高さをlastydownに格納
+        #         #前後フレーム距離
+        #         detects[i][3] = detects[i][4]
+        #         lastdist = detects[i][3]
+        #         detects[i][4] = dist
+        #         #前後フレームx角度
+        #         detects[i][5] = detects[i][6]
+        #         lastanglex = detects[i][5]
+        #         detects[i][6] = angle_x
+        #         break
+        #     i+=1
+        # if i==len(detects): #IDはリストに存在しない
+        #     detects.append([id, 0, ydown, -1, dist, 0, angle_x])
         spd=speed(lastdist, dist, lastanglex, angle_x, inferencetime)
 
         if ydown>=YSIZE-1:
@@ -129,13 +149,15 @@ while True:
             else:
                 info="No Approach"
         
-        #print("物体id", id, "物体種類", boxclass, "中下座標", xmid, ",", ydown, "h=", h)
+
+        print("物体id", id, "物体種類", boxclass, "中下座標", xmid, ",", ydown, "h=", h)
         cv2.rectangle(frame, (coordinate[0], coordinate[1]), (coordinate[2], coordinate[3]), (0, 255, 0), 2)
         cv2.putText(frame, f"Id.{id}, Dist.{dist/100:.2f}m", (coordinate[0], coordinate[1]),cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), thickness = 1, )
         cv2.putText(frame, f"Spd:{spd/100:.2f}m/s", (coordinate[0], coordinate[1]+20),cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), thickness = 1, )
         cv2.putText(frame, f"{info}", (coordinate[0], coordinate[1]+40),cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), thickness = 1, )
         cv2.drawMarker(frame, (xmid, ydown), (255, 0, 0), thickness = 2)
         cv2.putText(frame, f"({xmid},{ydown})", (xmid, ydown),cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), thickness = 1, )
+    print("#####################")
     cleanup_old_entries()
     # time.sleep(2) #force 1 fps
     cv2.imshow("frame", frame)

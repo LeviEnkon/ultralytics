@@ -10,9 +10,9 @@ from supervision.tools.detections import Detections, BoxAnnotator
 from supervision.tools.line_counter import LineCounter, LineCounterAnnotator
 
 # settings
-MODEL = "yolov8x.pt"
+MODEL = "best0709.pt"
 source = "0"
-SOURCE_VIDEO_PATH = "./vehicle-counting.mp4"
+SOURCE_VIDEO_PATH = "C:/NANZANU/Lab/NovaLab/dataset/video/PRO_VID_20230521_095353_10_005.mp4"
 
 model = YOLO(MODEL)
 model.fuse()

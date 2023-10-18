@@ -30,7 +30,7 @@ for box in results[0].boxes:
     xmid = int((coordinate[0]+coordinate[2])/2) #枠下線の中心点ｘ座標
     ydown = coordinate[3]
 
-    p = (xmid,ydown)
+    p = [xmid,ydown]
     dl = al*p[0] + bl*p[1] + cl
     dr = ar*p[0] + br*p[1] + cr
     if dl > 0 and dr > 0:
