@@ -116,11 +116,13 @@ while True:
     black_lines = ld.display_lines(copy, averaged_lines)
     frame = cv2.addWeighted(copy, 0.8, black_lines, 1, 1)
     ###############################
-    if results[0].boxes.id is None: #物体検出なし
-        cv2.imshow("frame", frame)
-        continue
     left_flag=0
     right_flag=0
+    if results[0].boxes.id is None: #物体検出なし
+        cv2.imshow("frame", frame)
+        left_flag=0
+        right_flag=0
+        continue
     for box in results[0].boxes:
         coordinate = box.xyxy.cpu().numpy().astype(int)[0]
         xmid = int((coordinate[0]+coordinate[2])/2) #枠下線の中心点ｘ座標
@@ -172,19 +174,27 @@ while True:
         spd=speed(lastdist, dist, lastanglex, angle_x, inferencetime) #前後フレームの距離、処理時間と水平ズレ角⇒速度
         #flag set################
         if lane_info == "left":
-            if approach_info=="Passing" or dist<5 or (approach_info=="Approaching" and (dist/100<10)):
+            if dist<=5 or approach_info=="Passing" or (approach_info=="Approaching" and (dist/100<15)):
                 left_flag=1 #red
-            elif approach_info=="Far" or (approach_info=="No Approach" and dist/100>15):
+            elif (left_flag==0) and (approach_info=="Far" or (approach_info=="No Approach" and dist/100>15)):
                 left_flag=0 #green
             else:
-                left_flag=2 #blue
+                if (left_flag!=1):
+                    left_flag=2 #blue
+                else:
+                    left_flag=1
         elif lane_info == "right":
-            if approach_info=="Passing" or dist<5 or (approach_info=="Approaching" and dist/100<5):
+            if dist<=5:
+                right_flag=1
+            elif approach_info=="Passing" or (approach_info=="Approaching" and dist/100<15):
                 right_flag=1 #red
-            elif approach_info=="Far" or (approach_info=="No Approach" and dist/100>15):
+            elif (right_flag==0) and (approach_info=="Far" or (approach_info=="No Approach" and dist/100>15)):
                 right_flag=0 #green
             else:
-                right_flag=2 #blue
+                if (right_flag!=1):
+                    right_flag=2 #blue
+                else:
+                    right_flag=1
         #########################
         #　↓　実験用表示UI
         cv2.rectangle(frame, (coordinate[0], coordinate[1]), (coordinate[2], coordinate[3]), (0, 255, 0), 2)
