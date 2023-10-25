@@ -7,6 +7,16 @@ import math
 import lanedetect as ld
 import pandas as pd
 import datetime
+import RPi.GPIO as GPIO
+
+GPIO.setmode(GPIO.BCM)
+RR_PIN=17
+RG_PIN=27
+RB_PIN=22
+LR_PIN=5
+LG_PIN=6
+LB_PIN=26
+GPIO.setup([RR_PIN,RG_PIN,RB_PIN,LR_PIN,LG_PIN,LB_PIN], GPIO.OUT)
 
 MOUNT_HEIGHT = 135.5 #カメラ視野高さ(cm)
 FOV_H = 60/2 #カメラ左右広角 Dynabook RX73:50
@@ -24,7 +34,7 @@ def cleanup_old_entries():
     global detects
     now = datetime.datetime.now()
     thirty_seconds_ago = now - datetime.timedelta(seconds=5)
-    # Only keep rows accessed within the last 30 seconds
+    # Only keep rows accessed within the last 5 seconds
     detects = detects[detects['last_accessed'] > thirty_seconds_ago]
 
 def access_or_add(id, newy=None, newd=None, newxan=None):
@@ -64,19 +74,31 @@ def speed(lastdist, dist, lastanglex, anglex, t):
         return -1
     return -(dist*math.cos(math.radians(anglex))-lastdist*math.cos(math.radians(lastanglex)))/t
 
-def panel_ctrl(lane, aprc, dist, spd):
-    if aprc=="Passing":
-        #red
-    elif dist/100<=10 or (dist/100<30 and (aprc=="Approaching" or spd>0)):
-        #red blink
-    elif dist/100>30 and (aprc!="Far"):
-        #yellow
-    else:
-        #green
+def panel_ctrl(left_flag, right_flag):
+    if left_flag==0:
+        GPIO.output([LR_PIN, LB_PIN], GPIO.LOW)
+        GPIO.output(LG_PIN, GPIO.HIGH)
+    elif left_flag==1:
+        GPIO.output([LG_PIN, LB_PIN], GPIO.LOW)
+        GPIO.output(LR_PIN, GPIO.HIGH)
+    elif left_flag==2:
+        GPIO.output([LR_PIN, LG_PIN], GPIO.LOW)
+        GPIO.output(LB_PIN, GPIO.HIGH)
+    if right_flag==0:
+        GPIO.output([RR_PIN, RB_PIN], GPIO.LOW)
+        GPIO.output(RG_PIN, GPIO.HIGH)
+    elif right_flag==1:
+        GPIO.output([RG_PIN, RB_PIN], GPIO.LOW)
+        GPIO.output(RR_PIN, GPIO.HIGH)
+    elif right_flag==2:
+        GPIO.output([RR_PIN, RG_PIN], GPIO.LOW)
+        GPIO.output(RB_PIN, GPIO.HIGH)
 
 while True:
     ret, frame= cap.read()
     if not ret: #入力なし
+        cap.release()
+        print(cap.isOpened())
         break
     initialtime = time.perf_counter() #処理開始時間
     results = model.track(frame, imgsz=XSIZE, conf=0.3, iou=0.5, persist=True, show=False, tracker='botsort.yaml')#load track model and get boxes
@@ -97,6 +119,8 @@ while True:
     if results[0].boxes.id is None: #物体検出なし
         cv2.imshow("frame", frame)
         continue
+    left_flag=0
+    right_flag=0
     for box in results[0].boxes:
         coordinate = box.xyxy.cpu().numpy().astype(int)[0]
         xmid = int((coordinate[0]+coordinate[2])/2) #枠下線の中心点ｘ座標
@@ -146,17 +170,22 @@ while True:
 
         inferencetime = time.perf_counter() - initialtime #速度測定直前までの処理時間
         spd=speed(lastdist, dist, lastanglex, angle_x, inferencetime) #前後フレームの距離、処理時間と水平ズレ角⇒速度
-
-        #パネルコントロール################
-        # if lane_info=="right":
-        #     panel_ctrl(2, approach_info, dist, spd)
-        # elif lane_info == "left":
-        #     panel_ctrl(0, approach_info, dist, spd)
-        # else:
-        #     panel_ctrl(1, approach_info, dist, spd)
-
-        #################################
-
+        #flag set################
+        if lane_info == "left":
+            if approach_info=="Passing" or dist<5 or (approach_info=="Approaching" and (dist/100<10)):
+                left_flag=1 #red
+            elif approach_info=="Far" or (approach_info=="No Approach" and dist/100>15):
+                left_flag=0 #green
+            else:
+                left_flag=2 #blue
+        elif lane_info == "right":
+            if approach_info=="Passing" or dist<5 or (approach_info=="Approaching" and dist/100<5):
+                right_flag=1 #red
+            elif approach_info=="Far" or (approach_info=="No Approach" and dist/100>15):
+                right_flag=0 #green
+            else:
+                right_flag=2 #blue
+        #########################
         #　↓　実験用表示UI
         cv2.rectangle(frame, (coordinate[0], coordinate[1]), (coordinate[2], coordinate[3]), (0, 255, 0), 2)
         cv2.putText(frame, f"Id.{id}, Dist.{dist/100:.2f}m", (coordinate[0], coordinate[1]),cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), thickness = 1, )
@@ -165,6 +194,14 @@ while True:
         cv2.drawMarker(frame, (xmid, ydown), (255, 0, 0), thickness = 2)
         cv2.putText(frame, f"{lane_info}", (xmid+10, ydown+10),cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), thickness = 2, )
         cv2.putText(frame, f"({xmid},{ydown})", (xmid, ydown),cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), thickness = 1, )
+
+    #パネルコントロール################
+    panel_ctrl(left_flag, right_flag)
+    #################################
     cv2.imshow("frame", frame)
     if cv2.waitKey(1) & 0xFF == ord("q"):
+        GPIO.output([RR_PIN, RG_PIN, RB_PIN, LR_PIN, LG_PIN, LB_PIN], GPIO.LOW)
+        GPIO.cleanup()
+        cv2.destroyAllWindows()
+        cap.release()
         break
