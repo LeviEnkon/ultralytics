@@ -37,16 +37,21 @@ def region(image): #make mask, use the result of canny
 
 def display_lines(image, lines):
     lines_image = np.zeros_like(image)
+    height, width = image.shape[:2]
     #make sure array isn't empty
-    if lines is not None:
-        for line in lines:
-            x1, y1, x2, y2 = line
-            #draw lines on a black image
-            cv2.line(lines_image, (x1, y1), (x2, y2), (255, 0, 0), 10)
+    try:
+        if lines is not None:
+            for line in lines:
+                x1, y1, x2, y2 = line
+                #draw lines on a black image
+                cv2.line(lines_image, (x1, y1), (x2, y2), (255, 0, 0), 10)
+    except cv2.error:
+        cv2.line(lines_image,(width//4, height), (width//2-35, 288), (255, 0, 0), 10)
+        cv2.line(lines_image,(width*3//4, height), (width//2+35, 288), (255, 0, 0), 10)
     return lines_image
 
 def make_points(image, average):
-    print(average)
+    # print(average)
     slope, y_int = average
     y1 = image.shape[0]
     #how long we want our lines to be --> 3/5 the size of the image
@@ -63,11 +68,11 @@ def average(image, lines):
     try: #only process when no error
         if lines is not None:
             for line in lines:
-                print(line)
+                # print(line)
                 x1, y1, x2, y2 = line.reshape(4)
                 #fit line to points, return slope and y-int
                 parameters = np.polyfit((x1, x2), (y1, y2), 1)
-                print(parameters)
+                # print(parameters)
                 slope = parameters[0]
                 y_int = parameters[1]
                 #lines on the right have positive slope, and lines on the left have neg slope

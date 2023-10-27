@@ -18,13 +18,13 @@ model = YOLO('yolov8n.pt') # best0709.pt yolov8n.pt
 source = "0"
 tracker='botsort.yaml'
 cap = cv2.VideoCapture(0)
-detects = pd.DataFrame(columns=["id", "newy", "newd", "newxan", "last_accessed"]) #前フレームの情報を格納するデータフレーム
+detects = pd.DataFrame(columns=["id", "newy", "newd", "newxan", "lane", "approach","dist", "spd",  "last_accessed"]) #前フレームの情報を格納するデータフレーム
 
 def cleanup_old_entries():
     global detects
     now = datetime.datetime.now()
-    thirty_seconds_ago = now - datetime.timedelta(seconds=5)
-    # Only keep rows accessed within the last 30 seconds
+    thirty_seconds_ago = now - datetime.timedelta(seconds=2)
+    # Only keep rows accessed within the last 2 seconds
     detects = detects[detects['last_accessed'] > thirty_seconds_ago]
 
 def access_or_add(id, newy=None, newd=None, newxan=None):
@@ -64,15 +64,15 @@ def speed(lastdist, dist, lastanglex, anglex, t):
         return -1
     return -(dist*math.cos(math.radians(anglex))-lastdist*math.cos(math.radians(lastanglex)))/t
 
-def panel_ctrl(lane, aprc, dist, spd):
-    if aprc=="Passing":
-        #red
-    elif dist/100<=10 or (dist/100<30 and (aprc=="Approaching" or spd>0)):
-        #red blink
-    elif dist/100>30 and (aprc!="Far"):
-        #yellow
-    else:
-        #green
+# def panel_ctrl(lane, aprc, dist, spd):
+#     if aprc=="Passing":
+#         #red
+#     elif dist/100<=10 or (dist/100<30 and (aprc=="Approaching" or spd>0)):
+#         #red blink
+#     elif dist/100>30 and (aprc!="Far"):
+#         #yellow
+#     else:
+#         #green
 
 while True:
     ret, frame= cap.read()
@@ -147,6 +147,7 @@ while True:
         inferencetime = time.perf_counter() - initialtime #速度測定直前までの処理時間
         spd=speed(lastdist, dist, lastanglex, angle_x, inferencetime) #前後フレームの距離、処理時間と水平ズレ角⇒速度
 
+        detects.loc[detects['id'] == id, ["lane", "approach", "dist", "spd"]] = [lane_info, approach_info, dist, spd]
         #パネルコントロール################
         # if lane_info=="right":
         #     panel_ctrl(2, approach_info, dist, spd)
@@ -165,6 +166,49 @@ while True:
         cv2.drawMarker(frame, (xmid, ydown), (255, 0, 0), thickness = 2)
         cv2.putText(frame, f"{lane_info}", (xmid+10, ydown+10),cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), thickness = 2, )
         cv2.putText(frame, f"({xmid},{ydown})", (xmid, ydown),cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), thickness = 1, )
+    
+    cleanup_old_entries()
+    if not detects["lane"].isin(["left"]).any():
+        left_flag = 0
+        print("left green")
+    else:
+        left_v = detects[detects["lane"]=="left"]
+        print(left_v)
+        left_close = min(list(left_v["dist"]))/100
+        print("left min", left_close)
+        if left_close<=5 or (left_v["approach"].isin(["Passing"]).any()) or not (left_v[(left_v["dist"]<=15)&(left_v["approach"]=="Approaching")].empty):
+            left_flag=1
+            print("left red")
+        elif left_close>5 and left_close<=15:
+            left_flag=2
+            print("left blue")
+        else:
+            left_flag=0
+            print("left green")
+    
+
+    if not detects["lane"].isin(["right"]).any():
+        right_flag=0
+        print("right green")
+    else:
+        right_v = detects[detects["lane"]=="right"]
+        right_close = min(list(right_v["dist"]))/100
+        print("right min", right_close)
+        if right_close<=5 or (right_v["approach"].isin(["Passing"]).any()) or not (right_v[(right_v["dist"]<=15)&(right_v["approach"]=="Approaching")].empty):
+            right_flag=1
+            print("right red")
+        elif right_close>5 and right_close<=15:
+            right_flag=2
+            print("right blue")
+        else:
+            right_flag=0
+            print("right green")
+    #パネルコントロール################
+    #panel_ctrl(left_flag, right_flag)
+    #################################
+    time.sleep(1)
     cv2.imshow("frame", frame)
     if cv2.waitKey(1) & 0xFF == ord("q"):
+        cv2.destroyAllWindows()
+        cap.release()
         break

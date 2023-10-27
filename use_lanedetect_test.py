@@ -4,7 +4,7 @@ import numpy as np
 import lanedetect as ld
 from ultralytics import YOLO
 
-image_path = r"./testcross.jpg"
+image_path = r"./testwhiteline.jpg"
 image1 = cv2.imread(image_path)
 image1 = cv2.resize(image1, dsize=(640,480))
 copy = np.copy(image1)
