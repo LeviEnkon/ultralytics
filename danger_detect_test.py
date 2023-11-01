@@ -14,8 +14,9 @@ FOV_V = 44/2
 YSIZE=480 #縦サイズ(1536x2016; 832x1088;q 480x640)
 XSIZE=640 #横サイズ
 
-model = YOLO('yolov8n.pt') # best0709.pt yolov8n.pt
+model = YOLO('best0709.pt') # best0709.pt yolov8n.pt
 source = "0"
+video = cv2.VideoCapture("C:/NANZANU/Lab/NovaLab/dataset/video/PRO_VID_20230521_095353_10_005.mp4")
 tracker='botsort.yaml'
 cap = cv2.VideoCapture(0)
 detects = pd.DataFrame(columns=["id", "newy", "newd", "newxan", "lane", "approach","dist", "spd",  "last_accessed"]) #前フレームの情報を格納するデータフレーム
@@ -75,7 +76,8 @@ def speed(lastdist, dist, lastanglex, anglex, t):
 #         #green
 
 while True:
-    ret, frame= cap.read()
+    ret, frame = video.read() #cap.read() video.read()
+    frame = cv2.resize(frame, (XSIZE, YSIZE))
     if not ret: #入力なし
         break
     initialtime = time.perf_counter() #処理開始時間
@@ -96,77 +98,77 @@ while True:
     ###############################
     if results[0].boxes.id is None: #物体検出なし
         cv2.imshow("frame", frame)
-        continue
-    for box in results[0].boxes:
-        coordinate = box.xyxy.cpu().numpy().astype(int)[0]
-        xmid = int((coordinate[0]+coordinate[2])/2) #枠下線の中心点ｘ座標
-        ydown = coordinate[3] #枠下線のｙ座標
-        #左右自車線判断##############
-        dl = al*xmid + bl*ydown + cl #画像に映った左レーン（リアカメラ左側⇒右レーン）
-        dr = ar*xmid + br*ydown + cr #画像に映った右レーン
-        if dl > 0 and dr > 0:
-            lane_info = "right"
-        elif (dl<= 0 and dr >=0) or (dl > 0 and dr < 0):
-            lane_info = "same"
-        else:
-            lane_info = "left"
-        ############################
-        h = box.xywh.cpu().numpy().astype(int)[0][3]
-        boxclass = box.cls.cpu().numpy().astype(int)
-        id = box.id.cpu().numpy().astype(int)[0]
-        i = 0
-        lasty = 0 #物体毎にlastリセット
-        lastdist = 0
-        lastanglex = 0
-        dist_an = distance_angle(xmid,ydown)
-        dist, angle_y, angle_x = dist_an[0], dist_an[1], dist_an[2]
-
-        #データフレームから前フレームの情報を取り出すかつデータフレームを更新/追加#########
-        if id not in detects['id'].values: #存在しなかった目標
-            lasty=0
-            lastdist=-1
-            lastanglex=0
-        else: #存在する目標、過去のデータを取り出す
-            lasty=detects.loc[detects['id'] == id, 'newy'].values[0]
-            lastdist=detects.loc[detects['id'] == id, 'newd'].values[0]
-            lastanglex=detects.loc[detects['id'] == id, 'newxan'].values[0]
-        access_or_add(id, ydown, dist, angle_x) #更新または追加
-        ##############################################################################
-
-        #接近探知　１フレーム下座標範囲外：通過　２フレーム下座標は画面の中線以上：遠い　３以外：前後フレームの下y座標で接近判断
-        if ydown>=YSIZE-1:
-            approach_info="Passing"
-        elif ydown<YSIZE//2:
-            approach_info="Far"
-        else:
-            if check_approach(lasty, ydown)==True:
-                approach_info="Approaching"
+    else:
+        for box in results[0].boxes:
+            coordinate = box.xyxy.cpu().numpy().astype(int)[0]
+            xmid = int((coordinate[0]+coordinate[2])/2) #枠下線の中心点ｘ座標
+            ydown = coordinate[3] #枠下線のｙ座標
+            #左右自車線判断##############
+            dl = al*xmid + bl*ydown + cl #画像に映った左レーン（リアカメラ左側⇒右レーン）
+            dr = ar*xmid + br*ydown + cr #画像に映った右レーン
+            if dl > 0 and dr > 0:
+                lane_info = "right"
+            elif (dl<= 0 and dr >=0) or (dl > 0 and dr < 0):
+                lane_info = "same"
             else:
-                approach_info="No Approach"
+                lane_info = "left"
+            ############################
+            h = box.xywh.cpu().numpy().astype(int)[0][3]
+            boxclass = box.cls.cpu().numpy().astype(int)
+            id = box.id.cpu().numpy().astype(int)[0]
+            i = 0
+            lasty = 0 #物体毎にlastリセット
+            lastdist = 0
+            lastanglex = 0
+            dist_an = distance_angle(xmid,ydown)
+            dist, angle_y, angle_x = dist_an[0], dist_an[1], dist_an[2]
 
-        inferencetime = time.perf_counter() - initialtime #速度測定直前までの処理時間
-        spd=speed(lastdist, dist, lastanglex, angle_x, inferencetime) #前後フレームの距離、処理時間と水平ズレ角⇒速度
+            #データフレームから前フレームの情報を取り出すかつデータフレームを更新/追加#########
+            if id not in detects['id'].values: #存在しなかった目標
+                lasty=0
+                lastdist=-1
+                lastanglex=0
+            else: #存在する目標、過去のデータを取り出す
+                lasty=detects.loc[detects['id'] == id, 'newy'].values[0]
+                lastdist=detects.loc[detects['id'] == id, 'newd'].values[0]
+                lastanglex=detects.loc[detects['id'] == id, 'newxan'].values[0]
+            access_or_add(id, ydown, dist, angle_x) #更新または追加
+            ##############################################################################
 
-        detects.loc[detects['id'] == id, ["lane", "approach", "dist", "spd"]] = [lane_info, approach_info, dist, spd]
-        #パネルコントロール################
-        # if lane_info=="right":
-        #     panel_ctrl(2, approach_info, dist, spd)
-        # elif lane_info == "left":
-        #     panel_ctrl(0, approach_info, dist, spd)
-        # else:
-        #     panel_ctrl(1, approach_info, dist, spd)
+            #接近探知　１フレーム下座標範囲外：通過　２フレーム下座標は画面の中線以上：遠い　３以外：前後フレームの下y座標で接近判断
+            if ydown>=YSIZE-1:
+                approach_info="Passing"
+            elif ydown<YSIZE//2:
+                approach_info="Far"
+            else:
+                if check_approach(lasty, ydown)==True:
+                    approach_info="Approaching"
+                else:
+                    approach_info="No Approach"
 
-        #################################
+            inferencetime = time.perf_counter() - initialtime #速度測定直前までの処理時間
+            spd=speed(lastdist, dist, lastanglex, angle_x, inferencetime) #前後フレームの距離、処理時間と水平ズレ角⇒速度
 
-        #　↓　実験用表示UI
-        cv2.rectangle(frame, (coordinate[0], coordinate[1]), (coordinate[2], coordinate[3]), (0, 255, 0), 2)
-        cv2.putText(frame, f"Id.{id}, Dist.{dist/100:.2f}m", (coordinate[0], coordinate[1]),cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), thickness = 1, )
-        cv2.putText(frame, f"Spd:{spd/100:.2f}m/s", (coordinate[0], coordinate[1]+20),cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), thickness = 1, )
-        cv2.putText(frame, f"{approach_info}", (coordinate[0], coordinate[1]+40),cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), thickness = 1, )
-        cv2.drawMarker(frame, (xmid, ydown), (255, 0, 0), thickness = 2)
-        cv2.putText(frame, f"{lane_info}", (xmid+10, ydown+10),cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), thickness = 2, )
-        cv2.putText(frame, f"({xmid},{ydown})", (xmid, ydown),cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), thickness = 1, )
-    
+            detects.loc[detects['id'] == id, ["lane", "approach", "dist", "spd"]] = [lane_info, approach_info, dist, spd]
+            #パネルコントロール################
+            # if lane_info=="right":
+            #     panel_ctrl(2, approach_info, dist, spd)
+            # elif lane_info == "left":
+            #     panel_ctrl(0, approach_info, dist, spd)
+            # else:
+            #     panel_ctrl(1, approach_info, dist, spd)
+
+            #################################
+
+            #　↓　実験用表示UI
+            cv2.rectangle(frame, (coordinate[0], coordinate[1]), (coordinate[2], coordinate[3]), (0, 255, 0), 2)
+            cv2.putText(frame, f"Id.{id}, Dist.{dist/100:.2f}m", (coordinate[0], coordinate[1]),cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), thickness = 1, )
+            cv2.putText(frame, f"Spd:{spd/100:.2f}m/s", (coordinate[0], coordinate[1]+20),cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), thickness = 1, )
+            cv2.putText(frame, f"{approach_info}", (coordinate[0], coordinate[1]+40),cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), thickness = 1, )
+            cv2.drawMarker(frame, (xmid, ydown), (255, 0, 0), thickness = 2)
+            cv2.putText(frame, f"{lane_info}", (xmid+10, ydown+10),cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), thickness = 2, )
+            cv2.putText(frame, f"({xmid},{ydown})", (xmid, ydown),cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), thickness = 1, )
+        
     cleanup_old_entries()
     if not detects["lane"].isin(["left"]).any():
         left_flag = 0
@@ -206,9 +208,10 @@ while True:
     #パネルコントロール################
     #panel_ctrl(left_flag, right_flag)
     #################################
-    time.sleep(1)
+    #time.sleep(1)
     cv2.imshow("frame", frame)
     if cv2.waitKey(1) & 0xFF == ord("q"):
+        video.release()
+        #cap.release()
         cv2.destroyAllWindows()
-        cap.release()
         break
