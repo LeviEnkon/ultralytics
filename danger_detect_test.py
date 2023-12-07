@@ -9,14 +9,14 @@ import pandas as pd
 import datetime
 
 MOUNT_HEIGHT = 135.5 #カメラ視野高さ(cm)
-FOV_H = 60/2 #カメラ左右広角 Dynabook RX73:50
-FOV_V = 44/2
+FOV_H = 150/2 #カメラ左右広角 Dynabook RX73:50 Insta360X3 150:93
+FOV_V = 93/2
 YSIZE=480 #縦サイズ(1536x2016; 832x1088;q 480x640)
 XSIZE=640 #横サイズ
 
 model = YOLO('best0709.pt') # best0709.pt yolov8n.pt
 source = "0"
-video = cv2.VideoCapture("C:/NANZANU/Lab/NovaLab/dataset/video/PRO_VID_20230521_095353_10_005.mp4")
+video = cv2.VideoCapture("C:/NANZANU/Lab/NovaLab/dataset/video/daytest112902.mp4")
 tracker='botsort.yaml'
 cap = cv2.VideoCapture(0)
 detects = pd.DataFrame(columns=["id", "newy", "newd", "newxan", "lane", "approach","dist", "spd",  "last_accessed"]) #前フレームの情報を格納するデータフレーム
@@ -108,10 +108,10 @@ while True:
             dr = ar*xmid + br*ydown + cr #画像に映った右レーン
             if dl > 0 and dr > 0:
                 lane_info = "right"
-            elif (dl<= 0 and dr >=0) or (dl > 0 and dr < 0):
-                lane_info = "same"
-            else:
+            elif dl < 0 and dr < 0:
                 lane_info = "left"
+            else:
+                lane_info = "same"
             ############################
             h = box.xywh.cpu().numpy().astype(int)[0][3]
             boxclass = box.cls.cpu().numpy().astype(int)
@@ -178,7 +178,7 @@ while True:
         print(left_v)
         left_close = min(list(left_v["dist"]))/100
         print("left min", left_close)
-        if left_close<=5 or (left_v["approach"].isin(["Passing"]).any()) or not (left_v[(left_v["dist"]<=15)&(left_v["approach"]=="Approaching")].empty):
+        if (left_close>0 and left_close<=5) or (left_v["approach"].isin(["Passing"]).any()) or not (left_v[(left_v["dist"]<=15)&(left_v["approach"]=="Approaching")].empty):
             left_flag=1
             print("left red")
         elif left_close>5 and left_close<=15:
@@ -196,7 +196,7 @@ while True:
         right_v = detects[detects["lane"]=="right"]
         right_close = min(list(right_v["dist"]))/100
         print("right min", right_close)
-        if right_close<=5 or (right_v["approach"].isin(["Passing"]).any()) or not (right_v[(right_v["dist"]<=15)&(right_v["approach"]=="Approaching")].empty):
+        if (right_close>0 and right_close<=5) or (right_v["approach"].isin(["Passing"]).any()) or not (right_v[(right_v["dist"]<=15)&(right_v["approach"]=="Approaching")].empty):
             right_flag=1
             print("right red")
         elif right_close>5 and right_close<=15:
@@ -208,7 +208,7 @@ while True:
     #パネルコントロール################
     #panel_ctrl(left_flag, right_flag)
     #################################
-    #time.sleep(1)
+    time.sleep(0.5)
     cv2.imshow("frame", frame)
     if cv2.waitKey(1) & 0xFF == ord("q"):
         video.release()

@@ -190,7 +190,7 @@ def main():
             else:
                 left_v = detects[detects["lane"]=="left"]
                 left_close = min(list(left_v["dist"]))/100
-                if (left_close>0&left_close<=5) or (left_v["approach"].isin(["Passing"]).any()) or not (left_v[(left_v["dist"]>0)&(left_v["dist"]<=15)&(left_v["approach"]=="Approaching")].empty):
+                if (left_close>0 and left_close<=5) or (left_v["approach"].isin(["Passing"]).any()) or not (left_v[(left_v["dist"]>0)&(left_v["dist"]<=15)&(left_v["approach"]=="Approaching")].empty):
                     left_flag=1
                 elif left_close>5 and left_close<=15:
                     left_flag=2
@@ -201,7 +201,7 @@ def main():
             else:
                 right_v = detects[detects["lane"]=="right"]
                 right_close = min(list(right_v["dist"]))/100
-                if (right_close>0&right_close<=5) or (right_v["approach"].isin(["Passing"]).any()) or not (right_v[(right_v["dist"]>0)&(right_v["dist"]<=15)&(right_v["approach"]=="Approaching")].empty):
+                if (right_close>0 and right_close<=5) or (right_v["approach"].isin(["Passing"]).any()) or not (right_v[(right_v["dist"]>0)&(right_v["dist"]<=15)&(right_v["approach"]=="Approaching")].empty):
                     right_flag=1
                 elif right_close>5 and right_close<=15:
                     right_flag=2

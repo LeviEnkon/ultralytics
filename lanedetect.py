@@ -29,7 +29,7 @@ def canny(image):
 
 def region(image): #make mask, use the result of canny
     height, width = image.shape
-    triangle = np.array([[(0, height), (width//2, height*2//3), (width, height)]])
+    triangle = np.array([[(0, height), (width//2, height*1//2), (width, height)]])
     mask = np.zeros_like(image)
     mask = cv2.fillPoly(mask, triangle, 255)
     mask = cv2.bitwise_and(image, mask)
